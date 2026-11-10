@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import FactCard from "@/components/FactCard";
 import SignOutButton from "@/components/SignOutButton";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -60,6 +61,8 @@ export default async function DashboardPage() {
           </Link>
         </div>
       </section>
+
+      <FactCard />
     </main>
   );
 }
