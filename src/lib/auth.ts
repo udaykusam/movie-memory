@@ -3,30 +3,26 @@ import { getServerSession, type NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import { prisma } from "@/lib/prisma";
 
-function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) throw new Error(`Missing required environment variable: ${name}`);
-  return value;
-}
-
 export const authOptions: NextAuthOptions = {
+  // The adapter saves users, Google accounts and sessions in Postgres.
   adapter: PrismaAdapter(prisma),
   providers: [
     GoogleProvider({
-      clientId: requireEnv("GOOGLE_CLIENT_ID"),
-      clientSecret: requireEnv("GOOGLE_CLIENT_SECRET"),
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     }),
   ],
-  // Sessions are stored in Postgres (Session table) so they can be revoked server-side.
+  // Sessions live in the Session table, so signing out deletes them on the server.
   session: { strategy: "database" },
   pages: { signIn: "/" },
   callbacks: {
-    // Expose the database user id to the app. Every data query is scoped by this id.
+    // Put the user's database id on the session. Every query uses this id.
     session({ session, user }) {
-      if (session.user) session.user.id = user.id;
+      session.user.id = user.id;
       return session;
     },
   },
 };
 
+// Reads the signed-in user's session on the server (null when signed out).
 export const getSession = () => getServerSession(authOptions);

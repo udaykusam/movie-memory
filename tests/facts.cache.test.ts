@@ -5,10 +5,7 @@ vi.mock("@/lib/prisma", async () => ({
   prisma: (await import("./helpers/fakePrisma")).fakePrisma,
 }));
 
-vi.mock("@/lib/openai", () => ({
-  OPENAI_TIMEOUT_MS: 10_000,
-  generateMovieFact: vi.fn(),
-}));
+vi.mock("@/lib/openai", () => ({ generateMovieFact: vi.fn() }));
 
 import { CACHE_WINDOW_MS, getFactForUser } from "@/lib/facts";
 import { generateMovieFact } from "@/lib/openai";

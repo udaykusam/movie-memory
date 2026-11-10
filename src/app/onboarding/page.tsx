@@ -5,13 +5,10 @@ import MovieForm from "./MovieForm";
 
 export default async function OnboardingPage() {
   const session = await getSession();
-  if (!session?.user?.id) redirect("/");
+  if (!session) redirect("/");
 
-  // A user who already has a movie can come here to change it; the form is prefilled.
-  const movie = await prisma.movie.findUnique({
-    where: { userId: session.user.id },
-    select: { title: true },
-  });
+  // Users who already have a movie come here to change it, so the form is prefilled.
+  const movie = await prisma.movie.findUnique({ where: { userId: session.user.id } });
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-6 px-4">

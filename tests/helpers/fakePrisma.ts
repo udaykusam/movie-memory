@@ -1,52 +1,40 @@
 import { vi } from "vitest";
 
-// A tiny in-memory stand-in for the parts of PrismaClient that facts.ts uses.
-// Queries really filter by their `where` clause, so a missing userId filter would show up in tests.
+// A tiny in-memory database that stands in for Prisma, so the tests need no real Postgres.
+// findFirst really filters by its `where`, so a query that forgot userId would fail a test.
 
-type MovieRow = { id: string; userId: string; title: string };
-type FactRow = { id: string; userId: string; movieId: string; text: string; createdAt: Date };
+type Movie = { id: string; userId: string; title: string };
+type Fact = { id: string; userId: string; movieId: string; text: string; createdAt: Date };
 
-export const db = { movies: [] as MovieRow[], facts: [] as FactRow[] };
+export const db = { movies: [] as Movie[], facts: [] as Fact[] };
 
 let nextId = 0;
-// Serialises transactions, standing in for the per-user Postgres advisory lock.
-let lockChain: Promise<unknown> = Promise.resolve();
 
-function matches(row: Record<string, unknown>, where: Record<string, unknown>) {
-  return Object.entries(where).every(([key, value]) => row[key] === value);
-}
-
-function pick<T extends Record<string, unknown>>(row: T, select?: Record<string, boolean>) {
-  if (!select) return { ...row };
-  return Object.fromEntries(Object.keys(select).map((key) => [key, row[key]]));
-}
+// Transactions run one after another, like the per-user Postgres lock.
+let lastTransaction: Promise<unknown> = Promise.resolve();
 
 export const fakePrisma = {
   movie: {
-    findUnique: vi.fn(async ({ where, select }: { where: { userId: string }; select?: Record<string, boolean> }) => {
-      const row = db.movies.find((m) => m.userId === where.userId);
-      return row ? pick(row, select) : null;
+    findUnique: vi.fn(async ({ where }: { where: { userId: string } }) => {
+      return db.movies.find((m) => m.userId === where.userId) ?? null;
     }),
   },
   fact: {
-    findFirst: vi.fn(async ({ where, select }: { where: Record<string, unknown>; select?: Record<string, boolean> }) => {
-      const rows = db.facts
-        .filter((f) => matches(f, where))
-        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-      return rows[0] ? pick(rows[0], select) : null;
+    findFirst: vi.fn(async ({ where }: { where: { userId: string; movieId: string } }) => {
+      const matching = db.facts.filter((f) => f.userId === where.userId && f.movieId === where.movieId);
+      matching.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()); // newest first
+      return matching[0] ?? null;
     }),
-    create: vi.fn(
-      async ({ data, select }: { data: Omit<FactRow, "id" | "createdAt">; select?: Record<string, boolean> }) => {
-        const row: FactRow = { id: `fact_${++nextId}`, createdAt: new Date(), ...data };
-        db.facts.push(row);
-        return pick(row, select);
-      },
-    ),
+    create: vi.fn(async ({ data }: { data: { userId: string; movieId: string; text: string } }) => {
+      const fact = { id: `fact_${++nextId}`, createdAt: new Date(), ...data };
+      db.facts.push(fact);
+      return fact;
+    }),
   },
   $executeRaw: vi.fn(async () => 1),
-  $transaction: vi.fn((fn: (tx: unknown) => Promise<unknown>) => {
-    const run = lockChain.then(() => fn(fakePrisma));
-    lockChain = run.catch(() => undefined);
+  $transaction: vi.fn((work: (tx: unknown) => Promise<unknown>) => {
+    const run = lastTransaction.then(() => work(fakePrisma));
+    lastTransaction = run.catch(() => {});
     return run;
   }),
 };
@@ -55,21 +43,16 @@ export function resetDb() {
   db.movies = [];
   db.facts = [];
   nextId = 0;
-  lockChain = Promise.resolve();
+  lastTransaction = Promise.resolve();
   vi.clearAllMocks();
 }
 
-export function addMovie(userId: string, title: string, id = `movie_${userId}`) {
+export function addMovie(userId: string, title: string) {
+  const id = `movie_${userId}`;
   db.movies.push({ id, userId, title });
   return id;
 }
 
 export function addFact(userId: string, movieId: string, text: string, ageMs: number) {
-  db.facts.push({
-    id: `fact_${++nextId}`,
-    userId,
-    movieId,
-    text,
-    createdAt: new Date(Date.now() - ageMs),
-  });
+  db.facts.push({ id: `fact_${++nextId}`, userId, movieId, text, createdAt: new Date(Date.now() - ageMs) });
 }

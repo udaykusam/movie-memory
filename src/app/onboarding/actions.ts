@@ -3,37 +3,32 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { movieFormSchema } from "@/lib/validation";
+import { movieTitleSchema } from "@/lib/validation";
 
-export type SaveMovieState = { error?: string };
-
-export async function saveMovie(
-  _prevState: SaveMovieState,
-  formData: FormData,
-): Promise<SaveMovieState> {
-  // Server actions are public endpoints: re-check the session here, never trust the page that rendered the form.
+export async function saveMovie(_prevState: { error: string }, formData: FormData) {
+  // Anyone can call a server action, so check the session here too.
   const session = await getSession();
-  if (!session?.user?.id) redirect("/");
+  if (!session) redirect("/");
   const userId = session.user.id;
 
-  // Server-side validation is the source of truth; the form's maxLength is only a convenience.
-  const parsed = movieFormSchema.safeParse({ title: formData.get("title") });
+  // Validate on the server. The form's maxLength is only a convenience for the user.
+  const parsed = movieTitleSchema.safeParse(formData.get("title"));
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Invalid movie title." };
+    return { error: parsed.error.issues[0].message };
   }
 
   try {
-    // Replace instead of update: the new movie gets a new id, and the cascade removes the old
-    // movie's facts, so the 60-second fact cache can never serve a fact about the previous title.
+    // Replace the movie instead of updating it. The new movie gets a new id and the old
+    // movie's facts are deleted with it, so the cache never shows a fact about the old title.
     await prisma.$transaction([
       prisma.movie.deleteMany({ where: { userId } }),
-      prisma.movie.create({ data: { userId, title: parsed.data.title } }),
+      prisma.movie.create({ data: { userId, title: parsed.data } }),
     ]);
   } catch (error) {
-    console.error("Failed to save favorite movie", error);
+    console.error("Failed to save movie", error);
     return { error: "We couldn't save your movie. Please try again." };
   }
 
-  // redirect() throws a special error, so it must stay outside the try/catch above.
+  // redirect() works by throwing, so it must stay outside the try/catch.
   redirect("/dashboard");
 }
