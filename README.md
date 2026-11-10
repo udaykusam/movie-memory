@@ -143,4 +143,4 @@ Tests use a small in-memory fake of the Prisma methods the fact service uses (`t
 
 ## AI usage
 
-I was allowed to use AI tools for this assignment. I used Claude (Anthropic) as an assistant: to explain concepts I was less familiar with (Postgres advisory locks, NextAuth database sessions, Prisma interactive transactions), to help debug setup issues, and to review and simplify my code. I made the design decisions, wrote and tested the code, and checked every change myself.
+I was allowed to use AI tools for this assignment. I used Claude (Anthropic) as an assistant: to explain concepts I was less familiar with (Postgres advisory locks, NextAuth database sessions, Prisma interactive transactions), to help debug setup issues, to review and simplify my code, and to help with testing (suggesting test cases, including the concurrency and fallback scenarios, and a manual test checklist). I made the design decisions, wrote and tested the code, and checked every change myself.
